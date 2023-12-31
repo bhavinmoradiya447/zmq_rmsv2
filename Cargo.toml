@@ -5,8 +5,26 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]] # Bin to run the HelloWorld gRPC server
+name = "stream-server"
+path = "src/server.rs"
+
+[[bin]] # Bin to run the HelloWorld gRPC client
+name = "rmsv2"
+path = "src/client.rs"
+
+
 [dependencies]
 zmq = "0.10.0"
 serde_json = "1.0.108"
 serde = { version = "1.0.193", features = ["derive"] }
 base64 = "0.21.5"
+tonic = "0.10"
+prost = "0.12"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = "0.1.14"
+h2 = "0.4.0"
+
+
+[build-dependencies]
+tonic-build = "0.10.2"
