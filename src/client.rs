@@ -21,7 +21,7 @@ struct Data {
     action: String,
 }
 
-#[tokio::main]
+#[tokio::main(worker_threads = 10)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = zmq::Context::new();
     let subscriber = context.socket(zmq::SUB).unwrap();
