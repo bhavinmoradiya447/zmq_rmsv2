@@ -2,12 +2,13 @@ mod server;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::StreamExt;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message;
-
+use tokio::time::sleep;
 #[derive(Serialize, Deserialize)]
 struct Data {
     call_leg_id: String,
@@ -80,5 +81,6 @@ async fn main() {
             }
             _ => println!("No matching case"),
         }
+        sleep(Duration::from_millis(10)).await;
     }
 }
