@@ -8,9 +8,9 @@ use std::time::Duration;
 use base64::{Engine as _, engine::{general_purpose}};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time::sleep;
-use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 
 use pb::{audio_stream_client::AudioStreamClient, StreamRequest};
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             call_leg_id: data.call_leg_id,
                             meta_data: data.metadata,
                             audio_stream: bytes,
-                        }).await.expect("Error sending Audio Stream");
+                        }).expect("Failed to send Message");
                     }
                     _ => {
                         println!("No Client present to stream");
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             call_leg_id: data.call_leg_id,
                             meta_data: data.metadata,
                             audio_stream: Vec::<u8>::new(),
-                        }).await.expect("Error Sending text message");
+                        }).expect("Error Sending text message");
                     }
                     _ => {
                         println!("No Client present to stream");
