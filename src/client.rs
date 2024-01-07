@@ -61,10 +61,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let (tx, rx) = mpsc::unbounded_channel::<StreamRequest>();
 
                 let call_leg_id = data.call_leg_id.clone();
+                let path = "/tmp/".to_owned() + &*data.call_leg_id.clone();
+
                 let meta_data = data.metadata.clone();
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
                 tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
-                tokio::spawn(async move { read_from_named_pipe("/tmp/".to_owned() + &*call_leg_id, call_leg_id, meta_data, session_map.clone()) });
+                tokio::spawn(async move { read_from_named_pipe(path, call_leg_id, meta_data, session_map.clone()) });
             }
             /*"audio_stream" => {
                 let bytes = general_purpose::STANDARD
