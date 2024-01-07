@@ -182,11 +182,11 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
                 std::thread::sleep(Duration::from_millis(2));
                 continue;
             } else {
-                let mut data = line;
+                let mut data = line.clone();
                 let mut close = false;
                 // let payload: Message = json::from_str(&line).expect("could not deserialize line");
                 if line.ends_with("close") {
-                    data = line.replace("close", "");
+                    data = data.replace("close", "");
                     close = true;
                 }
                 let leg_id = call_leg_id.clone();
