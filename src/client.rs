@@ -4,7 +4,7 @@ pub mod pb {
 
 use std::collections::HashMap;
 use std::{fs, io};
-use std::io::BufRead;
+use std::io::{BufRead, Read};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -171,8 +171,8 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
     loop {
 
         // If an error occurs during read, panic
-        let mut line = String::new();
-        let res = reader.read_line(&mut line);
+        let mut line = Vec::new();
+        let res = reader.read_to_end(&mut line);
         if let Err(err) = res {
             // Named pipes, by design, only support nonblocking reads and writes.
             // If a read would block, an error is thrown, but we can safely ignore it.
@@ -188,8 +188,8 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
                 let mut data = line.clone();
                 let mut close = false;
                 // let payload: Message = json::from_str(&line).expect("could not deserialize line");
-                if line.ends_with("close") {
-                    data = data.replace("close", "");
+                if line.ends_with(&[99, 108, 111, 115, 101]) { //ends with close
+                    data.truncate(line.len() - 5);
                     close = true;
                 }
                 let leg_id = call_leg_id.clone();
@@ -199,7 +199,7 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
                         tx.send(StreamRequest {
                             call_leg_id: leg_id,
                             meta_data: metadata,
-                            audio_stream: Vec::from(data),
+                            audio_stream: data,
                         }).expect("Error Sending text message");
                     }
                     _ => {
