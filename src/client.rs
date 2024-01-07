@@ -3,15 +3,11 @@ pub mod pb {
 }
 
 use std::collections::HashMap;
-use std::{env, fs, io};
-use std::fs::Metadata;
+use std::{fs, io};
 use std::io::BufRead;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::Sender;
 use std::time::Duration;
-use base64::{Engine as _, engine::{general_purpose}};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -179,7 +175,7 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
             // If a read would block, an error is thrown, but we can safely ignore it.
             match err.kind() {
                 io::ErrorKind::WouldBlock => continue,
-                _ => panic!(format!("error while reading from pipe: {:?}", err)),
+                _ => panic!("error while reading from pipe: {:?}", err),
             }
         } else if let Ok(count) = res {
             if count == 0 {
