@@ -3,7 +3,13 @@ pub mod pb {
 }
 
 use std::collections::HashMap;
+use std::{env, fs, io};
+use std::fs::Metadata;
+use std::io::BufRead;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::Sender;
 use std::time::Duration;
 use base64::{Engine as _, engine::{general_purpose}};
 use serde::{Deserialize, Serialize};
@@ -12,6 +18,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time::sleep;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
+use unix_named_pipe::FileFIFOExt;
 
 use pb::{audio_stream_client::AudioStreamClient, StreamRequest};
 
@@ -27,7 +34,7 @@ struct Data {
 type Tx = UnboundedSender<StreamRequest>;
 type SessionMap = Arc<Mutex<HashMap<String, Tx>>>;
 
-#[tokio::main(worker_threads = 10)]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = zmq::Context::new();
     let subscriber = context.socket(zmq::SUB).unwrap();
@@ -57,10 +64,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut client = AudioStreamClient::new(channel.clone());
                 let (tx, rx) = mpsc::unbounded_channel::<StreamRequest>();
 
+                let call_leg_id = data.call_leg_id.clone();
+                let meta_data = data.metadata.clone();
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
                 tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
+                tokio::spawn(async move { read_from_named_pipe("/tmp/".to_owned() + &*call_leg_id, call_leg_id, meta_data, session_map.clone()) });
             }
-            "audio_stream" => {
+            /*"audio_stream" => {
                 let bytes = general_purpose::STANDARD
                     .decode(data.audio_data).unwrap();
 
@@ -91,13 +101,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("No Client present to stream");
                     }
                 }
-            }
+            }*/
             "close" => {
                 println!("{}", envelope);
-                match session_map.lock().unwrap().remove(&data.call_leg_id) {
+                /*match session_map.lock().unwrap().remove(&data.call_leg_id) {
                     Some(tx) => drop(tx),
                     _ => println!("No Client present to close")
-                }
+                }*/
             }
             _ => println!("No matching case"),
         }
@@ -110,4 +120,103 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: Unbou
         .client_streaming_audio(UnboundedReceiverStream::new(rx))
         .await.unwrap().into_inner();
     println!("RESPONSE=\n{}", response.message);
+}
+
+fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
+    let pipe = unix_named_pipe::open_read(&pipe_path);
+    if let Err(err) = pipe {
+        match err.kind() {
+            io::ErrorKind::NotFound => {
+                println!("creating pipe at: {:?}", pipe_path.clone().as_ref());
+                unix_named_pipe::create(&pipe_path, Some(0o660))?;
+
+                // Note that this has the possibility to recurse forever if creation `open_write`
+                // fails repeatedly with `io::ErrorKind::NotFound`, which is certainly not nice behaviour.
+                return try_open(pipe_path);
+            }
+            _ => {
+                return Err(err);
+            }
+        }
+    }
+
+    let pipe_file = pipe.unwrap();
+    let is_fifo = pipe_file
+        .is_fifo()
+        .expect("could not read type of file at pipe path");
+    if !is_fifo {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "expected file at {:?} to be fifo, is actually {:?}",
+                &pipe_path.clone().as_ref(),
+                pipe_file.metadata()?.file_type(),
+            ),
+        ));
+    }
+
+    Ok(pipe_file)
+}
+
+fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: String, session_map: SessionMap) {
+    println!("server opening pipe: {}", file_name);
+
+    // Set up a keyboard interrupt handler so we can remove the pipe when
+    // the process is shut down.
+
+    // Open the pipe file for reading
+    let file = try_open(&file_name).expect("could not open pipe for reading");
+    let mut reader = io::BufReader::new(file);
+
+    // Loop reading from the pipe until a keyboard interrupt is received
+    loop {
+
+        // If an error occurs during read, panic
+        let mut line = String::new();
+        let res = reader.read_line(&mut line);
+        if let Err(err) = res {
+            // Named pipes, by design, only support nonblocking reads and writes.
+            // If a read would block, an error is thrown, but we can safely ignore it.
+            match err.kind() {
+                io::ErrorKind::WouldBlock => continue,
+                _ => panic!(format!("error while reading from pipe: {:?}", err)),
+            }
+        } else if let Ok(count) = res {
+            if count == 0 {
+                std::thread::sleep(Duration::from_millis(2));
+                continue;
+            } else {
+                let mut data = line;
+                let mut close = false;
+                // let payload: Message = json::from_str(&line).expect("could not deserialize line");
+                if line.ends_with("close") {
+                    data = line.replace("close", "");
+                    close = true;
+                }
+                let leg_id = call_leg_id.clone();
+                let metadata = meta_data.clone();
+                match session_map.lock().unwrap().get(&call_leg_id) {
+                    Some(tx) => {
+                        tx.send(StreamRequest {
+                            call_leg_id: leg_id,
+                            meta_data: metadata,
+                            audio_stream: Vec::from(data),
+                        }).expect("Error Sending text message");
+                    }
+                    _ => {
+                        println!("No Client present to stream");
+                    }
+                }
+                if close {
+                    match session_map.lock().unwrap().remove(&call_leg_id) {
+                        Some(tx) => drop(tx),
+                        _ => println!("No Client present to close")
+                    }
+                    fs::remove_file(&file_name).expect("could not remove pipe during shutdown");
+                    break;
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
 }
