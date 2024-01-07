@@ -66,7 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let meta_data = data.metadata.clone();
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
                 tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
-                tokio::spawn(async move { read_from_named_pipe(path, call_leg_id, meta_data, session_map.clone()) });
+                let map = session_map.clone();
+                tokio::spawn(async move { read_from_named_pipe(path, call_leg_id, meta_data, map) });
             }
             /*"audio_stream" => {
                 let bytes = general_purpose::STANDARD
