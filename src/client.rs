@@ -12,12 +12,10 @@ use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use unix_named_pipe::FileFIFOExt;
 use pb::{audio_stream_client::AudioStreamClient, StreamRequest};
-
+use futures::SinkExt;
 
 #[derive(Serialize, Deserialize)]
 struct Data {
