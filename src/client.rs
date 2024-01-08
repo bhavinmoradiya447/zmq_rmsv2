@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
-    let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(20));
+    let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(2));
     let response = client
         .client_streaming_audio(stream)
         .await.unwrap().into_inner();
@@ -217,6 +217,6 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
                 }
             }
         }
-        thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(20));
     }
 }
