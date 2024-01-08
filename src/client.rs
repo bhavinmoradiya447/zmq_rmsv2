@@ -28,7 +28,6 @@ type Tx = UnboundedSender<StreamRequest>;
 type SessionMap = Arc<Mutex<HashMap<String, Tx>>>;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    console_subscriber::init();
     let context = zmq::Context::new();
     let subscriber = context.socket(zmq::SUB).unwrap();
     subscriber
