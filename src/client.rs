@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
                 tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
                 let map = session_map.clone();
-                tokio::spawn(async move { read_from_named_pipe(path, call_leg_id, meta_data, map) });
+                tokio::spawn(async move { read_from_named_pipe(path, call_leg_id, meta_data, map).await});
             }
             /*"audio_stream" => {
                 let bytes = general_purpose::STANDARD
@@ -121,7 +121,7 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: Unbou
     println!("RESPONSE=\n{}", response.message);
 }
 
-fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
+async fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
     let pipe = unix_named_pipe::open_read(&pipe_path);
     if let Err(err) = pipe {
         match err.kind() {
@@ -157,7 +157,7 @@ fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
     Ok(pipe_file)
 }
 
-fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: String, session_map: SessionMap) {
+async fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: String, session_map: SessionMap) {
     println!("server opening pipe: {}", file_name);
 
     // Set up a keyboard interrupt handler so we can remove the pipe when
@@ -182,7 +182,7 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
             }
         } else if let Ok(count) = res {
             if count == 0 {
-                std::thread::sleep(Duration::from_millis(2));
+                tokio::time::sleep(Duration::from_millis(2)).await;
                 continue;
             } else {
                 let mut data = line.clone();
@@ -216,6 +216,6 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
                 }
             }
         }
-        std::thread::sleep(Duration::from_millis(1));
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
