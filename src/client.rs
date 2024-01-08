@@ -36,7 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     subscriber.set_subscribe(b"").expect("failed subscribing");
 
 
-    let channel = tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(Endpoint::from_static("http://10.192.133.169:5557")
+    let channel = tokio::runtime::Builder::new_current_thread().enable_all()
+        .build().unwrap().block_on(Endpoint::from_static("http://10.192.133.169:5557")
         .connect()).expect("Error connecting channel");
 
 
