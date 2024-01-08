@@ -3,8 +3,8 @@ pub mod pb {
 }
 
 use std::collections::HashMap;
-use std::{fs, io};
-use std::io::{BufRead, Read};
+use std::{fs, io, thread};
+use std::io::{Read};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed connecting subscriber");
     subscriber.set_subscribe(b"").expect("failed subscribing");
 
-    let channel = Endpoint::from_static("http://[::]:5557")
+    let channel = Endpoint::from_static("http://10.192.133.169:5557")
         .connect()
         .await?;
 
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
                 tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
                 let map = session_map.clone();
-                tokio::spawn(async move { read_from_named_pipe(path, call_leg_id, meta_data, map).await});
+                thread::spawn(move || { read_from_named_pipe(path, call_leg_id, meta_data, map) });
             }
             /*"audio_stream" => {
                 let bytes = general_purpose::STANDARD
@@ -121,7 +121,7 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: Unbou
     println!("RESPONSE=\n{}", response.message);
 }
 
-async fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
+fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
     let pipe = unix_named_pipe::open_read(&pipe_path);
     if let Err(err) = pipe {
         match err.kind() {
@@ -157,7 +157,7 @@ async fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> 
     Ok(pipe_file)
 }
 
-async fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: String, session_map: SessionMap) {
+fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: String, session_map: SessionMap) {
     println!("server opening pipe: {}", file_name);
 
     // Set up a keyboard interrupt handler so we can remove the pipe when
@@ -182,7 +182,7 @@ async fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data:
             }
         } else if let Ok(count) = res {
             if count == 0 {
-                tokio::time::sleep(Duration::from_millis(2)).await;
+                thread::sleep(Duration::from_millis(2));
                 continue;
             } else {
                 let mut data = line.clone();
@@ -216,6 +216,6 @@ async fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data:
                 }
             }
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        thread::sleep(Duration::from_millis(10));
     }
 }
