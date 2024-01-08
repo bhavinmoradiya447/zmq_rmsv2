@@ -3,7 +3,7 @@ pub mod pb {
 }
 
 use std::collections::HashMap;
-use std::{fs, io, thread};
+use std::{fs, future, io, thread};
 use std::io::{Read};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -11,7 +11,6 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
@@ -30,8 +29,8 @@ struct Data {
 type Tx = UnboundedSender<StreamRequest>;
 type SessionMap = Arc<Mutex<HashMap<String, Tx>>>;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    console_subscriber::init();
     let context = zmq::Context::new();
     let subscriber = context.socket(zmq::SUB).unwrap();
     subscriber
@@ -39,9 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed connecting subscriber");
     subscriber.set_subscribe(b"").expect("failed subscribing");
 
-    let channel = Endpoint::from_static("http://10.192.133.169:5557")
-        .connect()
-        .await?;
+    let channel = futures::executor::block_on(Endpoint::from_static("http://10.192.133.169:5557")
+        .connect()).expect("Error connecting channel");
+
 
     let session_map = SessionMap::new(Mutex::new(HashMap::new()));
 
@@ -65,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let meta_data = data.metadata.clone();
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
-                tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
+                thread::spawn(move || { init_streaming_audio(&mut client, rx); });
                 let map = session_map.clone();
                 thread::spawn(move || { read_from_named_pipe(path, call_leg_id, meta_data, map) });
             }
@@ -110,16 +109,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => println!("No matching case"),
         }
-        sleep(Duration::from_millis(10)).await;
+        thread::sleep(Duration::from_millis(10));
     }
 }
 
-async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
+fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
     let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(2));
-    let response = client
-        .client_streaming_audio(stream)
-        .await.unwrap().into_inner();
+    let response = futures::executor::block_on(client
+        .client_streaming_audio(stream)).expect("Failed to get response").into_inner();
     println!("RESPONSE=\n{}", response.message);
+    return;
 }
 
 fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {

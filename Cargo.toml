@@ -21,9 +21,11 @@ serde = { version = "1.0.193", features = ["derive"] }
 base64 = "0.21.5"
 tonic = "0.10"
 prost = "0.12"
-tokio = { version = "1.35.1", features = ["full"] }
+tokio = { version = "1.35.1", features = ["full", "tracing"] }
+console-subscriber = "0.2.0"
 tokio-stream = "0.1.14"
 unix-named-pipe = "0.2.0"
+futures = "0.3.30"
 
 
 [build-dependencies]
