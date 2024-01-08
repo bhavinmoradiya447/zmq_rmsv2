@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time::sleep;
+use tokio_stream::StreamExt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use unix_named_pipe::FileFIFOExt;
-
 use pb::{audio_stream_client::AudioStreamClient, StreamRequest};
 
 
@@ -115,8 +115,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
+    let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(20));
     let response = client
-        .client_streaming_audio(UnboundedReceiverStream::new(rx))
+        .client_streaming_audio(stream)
         .await.unwrap().into_inner();
     println!("RESPONSE=\n{}", response.message);
 }
