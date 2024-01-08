@@ -35,7 +35,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed connecting subscriber");
     subscriber.set_subscribe(b"").expect("failed subscribing");
 
-    let channel = futures::executor::block_on(Endpoint::from_static("http://10.192.133.169:5557")
+
+    let channel = tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(Endpoint::from_static("http://10.192.133.169:5557")
         .connect()).expect("Error connecting channel");
 
 
