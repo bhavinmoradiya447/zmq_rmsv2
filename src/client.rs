@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tonic::transport::{Channel, Endpoint};
 use unix_named_pipe::FileFIFOExt;
@@ -113,10 +112,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
-    let stream = rx.throttle(Duration::from_millis(2));
+    //let stream = rx.throttle(Duration::from_millis(2));
     //let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(2));
     let response = futures::executor::block_on(client
-        .client_streaming_audio(stream)).expect("Failed to get response").into_inner();
+        .client_streaming_audio(rx)).expect("Failed to get response").into_inner();
     println!("RESPONSE=\n{}", response.message);
     return;
 }
@@ -195,12 +194,12 @@ fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: Strin
                 let leg_id = call_leg_id.clone();
                 let metadata = meta_data.clone();
                 match session_map.lock().unwrap().get(&call_leg_id) {
-                    Some(tx) => {
-                        tx.send(StreamRequest {
+                    Some(mut tx) => {
+                        let _ = tx.send(StreamRequest {
                             call_leg_id: leg_id,
                             meta_data: metadata,
                             audio_stream: data,
-                        }).expect("Error Sending text message");
+                        });
                     }
                     _ => {
                         println!("No Client present to stream");
