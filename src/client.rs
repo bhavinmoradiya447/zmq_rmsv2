@@ -3,14 +3,15 @@ pub mod pb {
 }
 
 use std::collections::HashMap;
-use std::{fs, future, io, thread};
+use std::{fs, io, thread};
 use std::io::{Read};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use futures::channel::mpsc;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
@@ -57,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "init" => {
                 println!("{}", envelope);
                 let mut client = AudioStreamClient::new(channel.clone());
-                let (tx, rx) = mpsc::unbounded_channel::<StreamRequest>();
+                let (tx, rx) = mpsc::unbounded::<StreamRequest>();
 
                 let call_leg_id = data.call_leg_id.clone();
                 let path = "/tmp/".to_owned() + &*data.call_leg_id.clone();
@@ -114,7 +115,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
-    let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(2));
+    let stream = rx.throttle(Duration::from_millis(2));
+    //let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(2));
     let response = futures::executor::block_on(client
         .client_streaming_audio(stream)).expect("Failed to get response").into_inner();
     println!("RESPONSE=\n{}", response.message);
