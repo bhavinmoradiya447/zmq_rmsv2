@@ -27,7 +27,8 @@ struct Data {
 type Tx = UnboundedSender<StreamRequest>;
 type SessionMap = Arc<Mutex<HashMap<String, Tx>>>;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = zmq::Context::new();
     let subscriber = context.socket(zmq::SUB).unwrap();
     subscriber
@@ -36,10 +37,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     subscriber.set_subscribe(b"").expect("failed subscribing");
 
 
-    let channel = tokio::runtime::Builder::new_current_thread().enable_all()
+    /*let channel = tokio::runtime::Builder::new_current_thread().enable_all()
         .build().unwrap().block_on(Endpoint::from_static("http://10.192.133.169:5557")
-        .connect()).expect("Error connecting channel");
+        .connect()).expect("Error connecting channel");*/
 
+    let channel = Endpoint::from_static("http://10.192.133.169:5557")
+        .connect()
+        .await?;
 
     let session_map = SessionMap::new(Mutex::new(HashMap::new()));
 
@@ -108,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => println!("No matching case"),
         }
-        thread::sleep(Duration::from_millis(10));
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 
