@@ -39,10 +39,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed connecting subscriber");
     subscriber.set_subscribe(b"").expect("failed subscribing");
 
-    let channel = Endpoint::from_static("http://10.192.133.169:5557")
-        .connect()
-        .await?;
-
+    /*    let channel = Endpoint::from_static("http://10.192.133.169:5557")
+            .connect()
+            .await?;
+    */
     let session_map = SessionMap::new(Mutex::new(HashMap::new()));
 
     loop {
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match data.action.as_str() {
             "init" => {
                 println!("{}", envelope);
-                let mut client = AudioStreamClient::new(channel.clone());
+                let mut client = AudioStreamClient::connect("http://10.192.133.169:5557").await?; //AudioStreamClient::new(channel.clone());
                 let (tx, rx) = mpsc::unbounded_channel::<StreamRequest>();
 
                 let call_leg_id = data.call_leg_id.clone();
@@ -65,7 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let meta_data = data.metadata.clone();
                 session_map.lock().unwrap().insert(data.call_leg_id, tx);
-                tokio::spawn(async move { init_streaming_audio(&mut client, rx).await; });
+                tokio::spawn(async move {
+                    init_streaming_audio(&mut client, rx).await;
+                    drop(client);
+                });
                 let map = session_map.clone();
                 thread::spawn(move || { read_from_named_pipe(path, call_leg_id, meta_data, map) });
             }
@@ -120,6 +123,7 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: Unbou
         .client_streaming_audio(stream)
         .await.unwrap().into_inner();
     println!("RESPONSE=\n{}", response.message);
+    return;
 }
 
 fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
