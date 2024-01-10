@@ -9,6 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
+use tokio_stream::StreamExt;
 use tonic::transport::{Channel};
 use unix_named_pipe::FileFIFOExt;
 use pb::{audio_stream_client::AudioStreamClient};
@@ -106,7 +107,8 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Dat
     let reader = io::BufReader::new(file);
 
 
-    let stream = file_reader_stream::FileReaderStream::new(reader, data.metadata, data.call_leg_id);
+    let stream = file_reader_stream::FileReaderStream::new(reader, data.metadata, data.call_leg_id)
+        .throttle(Duration::from_millis(80));
     let response = client
         .client_streaming_audio(stream)
         .await.unwrap().into_inner();
