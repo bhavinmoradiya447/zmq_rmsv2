@@ -5,6 +5,7 @@ pub mod pb {
 }
 
 use std::{fs, io};
+use std::fs::File;
 use std::path::Path;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
@@ -50,8 +51,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "init" => {
                 println!("{}", envelope);
                 let mut client = AudioStreamClient::connect("http://10.192.133.169:5557").await?; //AudioStreamClient::new(channel.clone());
+                let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
+                let file = try_open(&file_name).expect("could not open pipe for reading");
                 tokio::spawn(async move {
-                    init_streaming_audio(&mut client, data).await;
+                    init_streaming_audio(&mut client, data, file).await;
                     drop(client);
                 });
             }
@@ -100,12 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Data) {
-    let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
-
-    let file = try_open(&file_name).expect("could not open pipe for reading");
+async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Data, file: File) {
     let reader = io::BufReader::new(file);
 
+    let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
 
     let stream = file_reader_stream::FileReaderStream::new(reader, data.metadata, data.call_leg_id)
         .throttle(Duration::from_millis(80));
