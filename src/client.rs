@@ -4,21 +4,16 @@ pub mod pb {
     tonic::include_proto!("rmsv2.audiostream");
 }
 
-use std::collections::HashMap;
-use std::{fs, io, thread};
+use std::{fs, io};
 use std::io::{Read};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use unix_named_pipe::FileFIFOExt;
-use pb::{audio_stream_client::AudioStreamClient, StreamRequest};
+use pb::{audio_stream_client::AudioStreamClient};
 
 
 #[derive(Serialize, Deserialize)]
@@ -123,9 +118,7 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Dat
         .client_streaming_audio(stream)
         .await.unwrap().into_inner();
     println!("RESPONSE=\n{}", response.message);
-    if stream.closed() {
-        fs::remove_file(&file_name).expect(&*format!("could not remove pipe file {}", file_name));
-    }
+    fs::remove_file(&file_name).expect(&*format!("could not remove pipe file {}", file_name));
     return;
 }
 

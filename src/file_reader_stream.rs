@@ -1,8 +1,8 @@
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufReader, Read};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::{fs, thread};
+use std::thread;
 use std::time::Duration;
 use tokio::io;
 use tokio_stream::Stream;
