@@ -5,13 +5,11 @@ pub mod pb {
 }
 
 use std::{fs, io};
-use std::io::{Read};
 use std::path::Path;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
-use tokio_stream::StreamExt;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Channel};
 use unix_named_pipe::FileFIFOExt;
 use pb::{audio_stream_client::AudioStreamClient};
 
@@ -51,11 +49,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "init" => {
                 println!("{}", envelope);
                 let mut client = AudioStreamClient::connect("http://10.192.133.169:5557").await?; //AudioStreamClient::new(channel.clone());
-
-                let call_leg_id = data.call_leg_id.clone();
-                let path = "/tmp/".to_owned() + &*data.call_leg_id.clone();
-
-                let meta_data = data.metadata.clone();
                 tokio::spawn(async move {
                     init_streaming_audio(&mut client, data).await;
                     drop(client);

@@ -25,9 +25,6 @@ impl FileReaderStream {
         self.reader
     }
 
-    pub fn closed(self) -> bool {
-        self.is_channel_closed
-    }
 }
 
 impl Stream for FileReaderStream {
