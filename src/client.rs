@@ -1,3 +1,5 @@
+mod file_reader_stream;
+
 pub mod pb {
     tonic::include_proto!("rmsv2.audiostream");
 }
@@ -27,9 +29,6 @@ struct Data {
     action: String,
 }
 
-type Tx = UnboundedSender<StreamRequest>;
-type SessionMap = Arc<Mutex<HashMap<String, Tx>>>;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = zmq::Context::new();
@@ -43,7 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .connect()
             .await?;
     */
-    let session_map = SessionMap::new(Mutex::new(HashMap::new()));
 
     loop {
         let envelope = subscriber
@@ -58,19 +56,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "init" => {
                 println!("{}", envelope);
                 let mut client = AudioStreamClient::connect("http://10.192.133.169:5557").await?; //AudioStreamClient::new(channel.clone());
-                let (tx, rx) = mpsc::unbounded_channel::<StreamRequest>();
 
                 let call_leg_id = data.call_leg_id.clone();
                 let path = "/tmp/".to_owned() + &*data.call_leg_id.clone();
 
                 let meta_data = data.metadata.clone();
-                session_map.lock().unwrap().insert(data.call_leg_id, tx);
                 tokio::spawn(async move {
-                    init_streaming_audio(&mut client, rx).await;
+                    init_streaming_audio(&mut client, data).await;
                     drop(client);
                 });
-                let map = session_map.clone();
-                thread::spawn(move || { read_from_named_pipe(path, call_leg_id, meta_data, map) });
             }
             /*"audio_stream" => {
                 let bytes = general_purpose::STANDARD
@@ -117,12 +111,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, rx: UnboundedReceiver<StreamRequest>) {
-    let stream = UnboundedReceiverStream::new(rx).throttle(Duration::from_millis(2));
+async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Data) {
+    let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
+
+    let file = try_open(&file_name).expect("could not open pipe for reading");
+    let reader = io::BufReader::new(file);
+
+
+    let stream = file_reader_stream::FileReaderStream::new(reader, data.metadata, data.call_leg_id);
     let response = client
         .client_streaming_audio(stream)
         .await.unwrap().into_inner();
     println!("RESPONSE=\n{}", response.message);
+    if stream.closed() {
+        fs::remove_file(&file_name).expect(&*format!("could not remove pipe file {}", file_name));
+    }
     return;
 }
 
@@ -162,65 +165,3 @@ fn try_open<P: AsRef<Path> + Clone>(pipe_path: P) -> io::Result<fs::File> {
     Ok(pipe_file)
 }
 
-fn read_from_named_pipe(file_name: String, call_leg_id: String, meta_data: String, session_map: SessionMap) {
-    println!("server opening pipe: {}", file_name);
-
-    // Set up a keyboard interrupt handler so we can remove the pipe when
-    // the process is shut down.
-
-    // Open the pipe file for reading
-    let file = try_open(&file_name).expect("could not open pipe for reading");
-    let mut reader = io::BufReader::new(file);
-
-    // Loop reading from the pipe until a keyboard interrupt is received
-    loop {
-
-        // If an error occurs during read, panic
-        let mut line = Vec::new();
-        let res = reader.read_to_end(&mut line);
-        if let Err(err) = res {
-            // Named pipes, by design, only support nonblocking reads and writes.
-            // If a read would block, an error is thrown, but we can safely ignore it.
-            match err.kind() {
-                io::ErrorKind::WouldBlock => continue,
-                _ => panic!("error while reading from pipe: {:?}", err),
-            }
-        } else if let Ok(count) = res {
-            if count == 0 {
-                thread::sleep(Duration::from_millis(2));
-                continue;
-            } else {
-                let mut data = line.clone();
-                let mut close = false;
-                // let payload: Message = json::from_str(&line).expect("could not deserialize line");
-                if line.ends_with(&[99, 108, 111, 115, 101]) { //ends with close
-                    data.truncate(line.len() - 5);
-                    close = true;
-                }
-                let leg_id = call_leg_id.clone();
-                let metadata = meta_data.clone();
-                match session_map.lock().unwrap().get(&call_leg_id) {
-                    Some(tx) => {
-                        tx.send(StreamRequest {
-                            call_leg_id: leg_id,
-                            meta_data: metadata,
-                            audio_stream: data,
-                        }).expect("Error Sending text message");
-                    }
-                    _ => {
-                        println!("No Client present to stream");
-                    }
-                }
-                if close {
-                    match session_map.lock().unwrap().remove(&call_leg_id) {
-                        Some(tx) => drop(tx),
-                        _ => println!("No Client present to close")
-                    }
-                    fs::remove_file(&file_name).expect("could not remove pipe during shutdown");
-                    break;
-                }
-            }
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
-}
