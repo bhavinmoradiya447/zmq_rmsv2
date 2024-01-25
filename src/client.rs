@@ -112,8 +112,8 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Dat
     let reader = io::BufReader::new(file);
 
     let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
-
-    let stream = file_reader_stream::FileReaderStream::new(reader, serde_json::to_string(&data.metadata)?, data.call_leg_id)
+    let metadata = serde_json::to_string(&data.metadata)?;
+    let stream = file_reader_stream::FileReaderStream::new(reader, metadata, data.call_leg_id)
         .throttle(Duration::from_millis(80));
     let response = client
         .client_streaming_audio(stream)

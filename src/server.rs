@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server = StreamServer {};
     Server::builder()
         .add_service(pb::audio_stream_server::AudioStreamServer::new(server))
-        .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap())
+        .serve("[::1]:5557".to_socket_addrs().unwrap().next().unwrap())
         .await
         .unwrap();
 
