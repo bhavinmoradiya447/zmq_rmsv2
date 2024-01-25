@@ -17,9 +17,14 @@ use pb::{audio_stream_client::AudioStreamClient};
 
 
 #[derive(Serialize, Deserialize)]
+struct Metadata {
+    host_name: String,
+}
+
+#[derive(Serialize, Deserialize)]
 struct Data {
     call_leg_id: String,
-    metadata: String,
+    metadata: Metadata,
     audio_data: String,
     action: String,
 }
@@ -46,11 +51,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         //println!("Received message with size: {} ", envelope);
         let data: Data = serde_json::from_str(&*envelope).unwrap();
-
+        let host_name = data.metadata.host_name.clone();
         match data.action.as_str() {
             "init" => {
                 println!("{}", envelope);
-                let mut client = AudioStreamClient::connect("http://10.192.133.169:5557").await?; //AudioStreamClient::new(channel.clone());
+                let mut client = AudioStreamClient::connect(host_name).await?; //AudioStreamClient::new(channel.clone());
                 let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
                 let file = try_open(&file_name).expect("could not open pipe for reading");
                 tokio::spawn(async move {
@@ -108,7 +113,7 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Dat
 
     let file_name = "/tmp/".to_owned() + &*data.call_leg_id.clone();
 
-    let stream = file_reader_stream::FileReaderStream::new(reader, data.metadata, data.call_leg_id)
+    let stream = file_reader_stream::FileReaderStream::new(reader, serde_json::to_string(&data.metadata)?, data.call_leg_id)
         .throttle(Duration::from_millis(80));
     let response = client
         .client_streaming_audio(stream)
