@@ -24,7 +24,6 @@ impl FileReaderStream {
     pub fn into_inner(self) -> BufReader<File> {
         self.reader
     }
-
 }
 
 impl Stream for FileReaderStream {
@@ -68,11 +67,19 @@ impl Stream for FileReaderStream {
                         }
                         let leg_id = self.call_leg_id.clone();
                         let metadata = self.meta_data.clone();
-                        Poll::Ready(Some(StreamRequest {
-                            call_leg_id: leg_id,
-                            meta_data: metadata,
-                            audio_stream: data,
-                        }))
+                        if self.is_channel_closed {
+                            Poll::Ready(Some(StreamRequest {
+                                call_leg_id: leg_id,
+                                meta_data: "{\"action\" : \"stop\"}".parse().unwrap(),
+                                audio_stream: data,
+                            }))
+                        } else {
+                            Poll::Ready(Some(StreamRequest {
+                                call_leg_id: leg_id,
+                                meta_data: metadata,
+                                audio_stream: data,
+                            }))
+                        }
                     }
                 }
             }

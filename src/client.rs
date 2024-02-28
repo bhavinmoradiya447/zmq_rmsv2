@@ -111,6 +111,7 @@ async fn init_streaming_audio(client: &mut AudioStreamClient<Channel>, data: Dat
 
     let stream = file_reader_stream::FileReaderStream::new(reader, data.metadata, data.call_leg_id)
         .throttle(Duration::from_millis(80));
+
     let response = client
         .client_streaming_audio(stream)
         .await.unwrap().into_inner();
